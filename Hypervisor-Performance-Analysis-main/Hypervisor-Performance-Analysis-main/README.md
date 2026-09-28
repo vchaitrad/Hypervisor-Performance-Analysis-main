@@ -1,0 +1,270 @@
+# Performance Analysis of Type-1 and Type-2 Hypervisors
+
+Cloud Computing Lab experiment - Proxmox VE vs VMware Workstation
+
+---
+
+## Objective
+
+- To understand the difference between Type-1 and Type-2 hypervisors
+- To create the same Ubuntu VM on a Type-1 hypervisor (Proxmox VE) and a Type-2 hypervisor (VMware Workstation)
+- To run a Sysbench CPU benchmark on both VMs
+- To compare the CPU performance of both hypervisors using the results
+
+## Hypervisors Used
+
+- Type-1: Proxmox VE
+- Type-2: VMware Workstation
+
+Proxmox VE runs on a physical server and I used it from the browser. VMware Workstation runs on top of a host operating system.
+
+## Architecture
+
+### Type-1 Hypervisor (Bare-Metal)
+
+```mermaid
+graph TD
+    A[Virtual Machines - VMs] --> B[Hypervisor - Proxmox VE]
+    B --> C[Physical Hardware]
+```
+
+The hypervisor installs directly on the hardware. There is no host operating system in between, so the VMs get near-direct access to the CPU, RAM and disk.
+
+### Type-2 Hypervisor (Hosted)
+
+```mermaid
+graph TD
+    A[Virtual Machines - VMs] --> B[Hypervisor - VMware Workstation]
+    B --> C[Host Operating System]
+    C --> D[Physical Hardware]
+```
+
+The hypervisor runs as an application on top of a host operating system. VM requests pass through the host OS before reaching the hardware, which adds an extra layer compared to Type-1.
+
+## VM Configuration
+
+I used the same configuration on both:
+
+- OS: Ubuntu
+- CPU: 2 vCPU
+- RAM: 2 GB
+- Disk: 20 GB
+- Benchmark: Sysbench
+
+Sysbench command:
+
+```bash
+sysbench cpu --cpu-max-prime=20000 run
+```
+
+---
+
+## Type-1: Proxmox VE
+
+### Login
+
+- Opened `https://<PROXMOX_SERVER_IP>:8006` in the browser
+- A security warning came because of the self-signed certificate, so I clicked Advanced and then Proceed
+- Logged in with the given credentials
+
+### VM Settings
+
+I clicked Create VM and used these settings:
+
+- Name: `CC-Experiment1-Type1`
+- OS: Ubuntu ISO, storage `local`
+- Disk: 20 GB (`local-lvm`)
+- CPU: 1 socket, 2 cores (2 vCPU)
+- Memory: 2048 MiB (2 GB)
+- Network: bridge `vmbr0`
+- System tab: left as default
+
+### After Creating the VM
+
+- Started the VM and opened the Console
+- Installed Ubuntu and logged in
+- Checked the VM with `hostnamectl`, `lscpu`, `free -h`, `df -h` and `top`
+- Installed Sysbench and ran the benchmark:
+
+```bash
+sudo apt update
+sudo apt install sysbench -y
+sysbench --version
+sysbench cpu --cpu-max-prime=20000 run
+```
+
+- Checked CPU, memory, network and disk usage in the Summary page of the VM
+- Shut down the VM using `sudo poweroff`
+
+### Screenshots
+
+More screenshots and details are in the [Type-1-Proxmox](Type-1-Proxmox) folder.
+
+---
+
+## Type-2: VMware Workstation
+
+### VM Settings
+
+I opened VMware Workstation, clicked Create a New Virtual Machine and used these settings:
+
+- Configuration: Typical (recommended)
+- Installer disc image file (iso): Ubuntu ISO
+- Guest OS: Linux, Ubuntu 64-bit
+- Name: `CC-Experiment1-Type2`
+- Disk: 20 GB
+- In Customize Hardware:
+  - Memory: 2048 MB (2 GB)
+  - Processors: 1 processor, 2 cores (2 vCPU)
+  - Network Adapter: NAT
+
+### After Creating the VM
+
+- Powered on the VM and installed Ubuntu (computer name `cc-type2-vm`)
+- Restarted and logged in
+- Checked the VM with `hostnamectl`, `lscpu`, `free -h`, `df -h` and `top`
+- Installed Sysbench and ran the benchmark:
+
+```bash
+sudo apt update
+sudo apt install sysbench -y
+sysbench --version
+sysbench cpu --cpu-max-prime=20000 run
+```
+
+- Checked the hardware settings under VM, then Settings
+- Shut down the VM using `sudo poweroff`
+
+### Screenshots
+
+More screenshots and details are in the [Type-2-VMware](Type-2-VMware) folder.
+
+---
+
+## Results
+
+### Type-1: Proxmox VE
+
+- Total Execution Time: 10.0030s
+- Total Events: 14548
+- Events per Second: 1453.98
+- Average Latency: 0.69 ms
+
+### Type-2: VMware Workstation
+
+- Total Execution Time: 10.0008s
+- Total Events: 12778
+- Events per Second: 1277.56
+- Minimum Latency: 0.65 ms
+- Average Latency: 0.78 ms
+- Maximum Latency: 7.56 ms
+
+## Performance Comparison Table
+
+| | Type-1 (Proxmox VE) | Type-2 (VMware Workstation) |
+|---|---|---|
+| Total Execution Time | 10.0030s | 10.0008s |
+| Total Events | 14548 | 12778 |
+| Events per Second | 1453.98 | 1277.56 |
+| Average Latency | 0.69 ms | 0.78 ms |
+
+Observation: In this test, Proxmox VE (Type-1) gave a higher events per second (1453.98) than VMware Workstation (Type-2) (1277.56), and also had lower average latency (0.69 ms vs 0.78 ms). Both VMs had the same configuration (2 vCPU, 2 GB RAM, 20 GB disk).
+
+## Metric Explanations & Visualizations
+
+- **Total Execution Time**: how long the Sysbench test ran for. Both tests ran for close to 10 seconds.
+- **Total Events**: total number of prime number calculations completed during the test. Higher is better.
+- **Events per Second**: how many calculations were done per second (throughput). Higher is better.
+- **Average Latency**: the average time taken per event. Lower is better.
+
+### Performance Comparison Charts
+
+![Sysbench CPU benchmark comparison](Comparison/comparison-dashboard.png)
+
+## Technical Analysis & Discussion
+
+Proxmox VE performed better in this test because it is a Type-1 hypervisor, which means it runs directly on the physical hardware. VMware Workstation is a Type-2 hypervisor, which runs on top of a host operating system, so the guest VM's requests have to pass through an extra layer (the host OS) before reaching the hardware. This extra layer adds some overhead, which is likely why VMware Workstation showed lower throughput and higher latency compared to Proxmox VE in this experiment.
+
+## Commands Used
+
+```bash
+hostnamectl
+lscpu
+free -h
+df -h
+top
+sudo apt update
+sudo apt install sysbench -y
+sysbench --version
+sysbench cpu --cpu-max-prime=20000 run
+sudo poweroff
+```
+
+## Conclusion
+
+I made the same VM (2 vCPU, 2 GB RAM, 20 GB disk, Ubuntu) on Proxmox VE and VMware Workstation and ran the same Sysbench CPU test on both. In this test, Proxmox VE performed better in terms of events per second and average latency compared to VMware Workstation, which matches what is expected for a Type-1 (bare-metal) hypervisor compared to a Type-2 (hosted) hypervisor.
+
+---
+
+## Lab Report
+
+### Aim
+
+To create the same Ubuntu virtual machine on a Type-1 hypervisor (Proxmox VE) and a Type-2 hypervisor (VMware Workstation), run a Sysbench CPU benchmark on both, and compare their performance.
+
+### Requirements
+
+- Proxmox VE server (Type-1 hypervisor)
+- VMware Workstation (Type-2 hypervisor)
+- Ubuntu ISO
+- Sysbench benchmarking tool
+- Internet connection
+
+### Procedure
+
+**Type-1: Proxmox VE**
+
+1. Logged in to Proxmox VE from the browser.
+2. Created a new VM with 2 vCPU, 2 GB RAM, 20 GB disk.
+3. Installed Ubuntu on the VM.
+4. Checked system details using `hostnamectl`, `lscpu`, `free -h`, `df -h` and `top`.
+5. Installed Sysbench and ran the CPU benchmark.
+6. Noted down the results.
+
+**Type-2: VMware Workstation**
+
+1. Opened VMware Workstation and created a new VM with the same configuration.
+2. Installed Ubuntu on the VM.
+3. Checked system details using `hostnamectl`, `lscpu`, `free -h`, `df -h` and `top`.
+4. Installed Sysbench and ran the CPU benchmark.
+5. Noted down the results.
+
+### Result
+
+| | Type-1 (Proxmox VE) | Type-2 (VMware Workstation) |
+|---|---|---|
+| Events per Second | 1453.98 | 1277.56 |
+| Total Events | 14548 | 12778 |
+| Average Latency | 0.69 ms | 0.78 ms |
+
+### Result / Conclusion
+
+Proxmox VE (Type-1) gave a higher events per second and lower average latency than VMware Workstation (Type-2) in this test. Both VMs had the same configuration, so Proxmox VE performed better in this experiment. This is because Type-1 hypervisors run directly on the hardware, while Type-2 hypervisors run on top of a host operating system, which adds some overhead.
+
+---
+
+## Repository Structure
+
+```
+Hypervisor-Performance-Analysis/
+├── README.md              (this file - contains everything: architecture, steps, results, graphs, lab report)
+├── Type-1-Proxmox/         (screenshots and result of Proxmox VE)
+│   └── README.md
+├── Type-2-VMware/          (screenshots and result of VMware Workstation)
+│   └── README.md
+└── Comparison/              (comparison table, graph image and observation)
+    ├── README.md
+    └── comparison-dashboard.png
+```
+
+To reproduce this experiment: create an Ubuntu VM with the same configuration (2 vCPU, 2 GB RAM, 20 GB disk) on both a Type-1 and a Type-2 hypervisor, install Sysbench, and run `sysbench cpu --cpu-max-prime=20000 run` on both.
